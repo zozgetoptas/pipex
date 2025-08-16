@@ -13,9 +13,11 @@
 #ifndef PIPEX_H
 # define PIPEX_H
 
-# include <unistd.h>
-# include <fcntl.h>
-# include <stdio.h>
-# include <stdlib.h>
+void error_exit(char *error_message);
+void free_array(char **arr);
+char **get_path_directories(char **envp);
+void print_error(char *prefix, char *cmd);
+char *find_command_path(char *command, char **envp);
+void cleanup_and_exit(int *pipe_fds, int exit_code);
 
 #endif

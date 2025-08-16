@@ -11,33 +11,46 @@
 /* ************************************************************************** */
 
 #include <stdio.h>
-#include <unistd.h>
+#include "pipex.h"
 #include <stddef.h>
-#include "libft.h"
+#include "libft/libft.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
-void	execute_command(char *command, char **envp)
+
+static void	execute_command(char *command, char **envp)
 {
 	char	**command_args;
 	char	*command_path;
 
 	command_args = ft_split(command, ' ');
-	if (!command_args || !command_args[0])
+	if (!command_args)
+		error_exit("pipex: memory allocation failed");
+	if (!command_args[0])
 	{
-		ft_putstr_fd("empty command\n", 2);
-		if (command_args)
-			free_array(command_args);
+		ft_putstr_fd("pipex: empty command\n", 2);
+		free_array(command_args);
 		exit(1);
 	}
 	command_path = find_command_path(command_args[0], envp);
 	if (!command_path)
 	{
-		print_error("command not found: ", command_args[0]);
-		free_array(command_args);
-		exit(127);
+		if (access(command_args[0], F_OK) == 0 && access(command_args[0], X_OK) == -1)
+		{
+			// Dosya var (F_OK), ama çalıştırılabilir değil (X_OK)
+			print_error("pipex: permission denied: ", command_args[0]);
+			free_array(command_args);
+			exit(126);
+		}
+		else
+		{
+			// Komut hiçbir yerde bulunamadı
+			print_error("command not found: ", command_args[0]);
+			free_array(command_args);
+			exit(127);
+		}
 	}
 	if (execve(command_path, command_args, envp) == -1)
 	{
@@ -48,7 +61,7 @@ void	execute_command(char *command, char **envp)
 	}
 }
 
-void	first_child_process(int *pipe_fds, char **argv, char **envp)
+static void	first_child_process(int *pipe_fds, char **argv, char **envp)
 {
 	int	first_file_fd;
 
@@ -61,19 +74,25 @@ void	first_child_process(int *pipe_fds, char **argv, char **envp)
 		close(pipe_fds[1]);
 		exit(1);
 	}
-	if (dup2(first_file_fd, 0) == -1) // ilk komutun stdin'i infile olsun
+	if (dup2(first_file_fd, 0) == -1)
+	{
+		close(pipe_fds[1]);
+		close(first_file_fd);
 		error_exit("dup2 infile failed");
+	}
 	close(first_file_fd);
-	if (dup2(pipe_fds[1], 1) == -1) // ilk komutun stdout'u pipe'ın write ucu olsun
+	if (dup2(pipe_fds[1], 1) == -1)
 		error_exit("dup2 pipe write failed");
 	close(pipe_fds[1]);
 	execute_command(argv[2], envp);
 }
 
-void	second_child_process(int *pipe_fds, char **argv, char **envp)
+static void	second_child_process(int *pipe_fds, char **argv, char **envp)
 {
+	int second_file_fd;
+	
 	close(pipe_fds[1]);
-	int second_file_fd = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	second_file_fd = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (second_file_fd == -1)
 	{
 		ft_putstr_fd("pipex: ", 2);
@@ -81,11 +100,18 @@ void	second_child_process(int *pipe_fds, char **argv, char **envp)
 		close(pipe_fds[0]);
 		exit(1);
 	}
-	if (dup2(pipe_fds[0], STDIN_FILENO) == -1) // ikinci komutun stdin'i pıpe'ın read ucu olsun
+	if (dup2(pipe_fds[0], STDIN_FILENO) == -1)
+	{
+		close(pipe_fds[0]);
+		close(second_file_fd);
 		error_exit("dup2 pipe read failed");
+	}
 	close(pipe_fds[0]);
-	if (dup2(second_file_fd, STDOUT_FILENO) == -1) // ikinci komutun stdout'u outfile olsun
+	if (dup2(second_file_fd, STDOUT_FILENO) == -1)
+	{
+		close(second_file_fd);
 		error_exit("dup2 outfile failed");
+	}
 	close(second_file_fd);
 	execute_command(argv[3], envp);
 }
@@ -124,7 +150,8 @@ int	main(int argc, char **argv, char **envp)
 	}
 	if (pipe(pipe_fds) == -1)
 		error_exit("error occurred while opening the pipe");
-
 	create_processes(pipe_fds, argv, envp);
 	return (0);
 }
+
+

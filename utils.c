@@ -13,12 +13,21 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stddef.h>
-#include "libft.h"
+#include "libft/libft.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
+void cleanup_and_exit(int *pipe_fds, int exit_code)
+{
+    if (pipe_fds)
+    {
+        if (pipe_fds[0] != -1) close(pipe_fds[0]);
+        if (pipe_fds[1] != -1) close(pipe_fds[1]);
+    }
+    exit(exit_code);
+}
 void	error_exit(char *error_message)
 {
 	perror(error_message); // stderr'e yazar (errno'ya gore cikti)
@@ -85,3 +94,5 @@ char	*find_command_path(char *command, char **envp)
 	}
 	return (free_array(directories_to_check), NULL);
 }
+
+

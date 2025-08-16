@@ -1,5 +1,5 @@
 NAME = pipex
-SRCS = pipex.c
+SRCS = pipex.c utils.c
 OBJS = $(SRCS:.c=.o)
 
 LIBFT_DIR = libft
