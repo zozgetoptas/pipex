@@ -92,10 +92,13 @@ static void	second_child_process(int *pipe_fds, char **argv, char **envp)
 	execute_command(argv[3], envp);
 }
 
-static void	create_processes(int *pipe_fds, char **argv, char **envp)
+static int	create_processes(int *pipe_fds, char **argv, char **envp)
 {
 	pid_t	pid1;
 	pid_t	pid2;
+	int		status1;
+	int		status2;
+    int		final_exit_status;
 
 	pid1 = fork();
 	if (pid1 == -1)
@@ -109,13 +112,19 @@ static void	create_processes(int *pipe_fds, char **argv, char **envp)
 		second_child_process(pipe_fds, argv, envp);
 	close(pipe_fds[0]);
 	close(pipe_fds[1]);
-	waitpid(pid1, NULL, 0);
-	waitpid(pid2, NULL, 0);
+	waitpid(pid1, &status1, 0);
+	waitpid(pid2, &status2, 0);
+	if (WIFEXITED(status2))
+        final_exit_status = WEXITSTATUS(status2);
+    else
+        final_exit_status = 1;
+    return (final_exit_status);
 }
 
 int	main(int argc, char **argv, char **envp)
 {
 	int	pipe_fds[2];
+	int	exit_status;
 
 	if (argc != 5)
 	{
@@ -124,6 +133,6 @@ int	main(int argc, char **argv, char **envp)
 	}
 	if (pipe(pipe_fds) == -1)
 		error_exit("error occurred while opening the pipe");
-	create_processes(pipe_fds, argv, envp);
-	return (0);
+	exit_status = create_processes(pipe_fds, argv, envp);
+	return (exit_status);
 }

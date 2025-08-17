@@ -37,14 +37,15 @@ char	*validate_and_get_command_path(char **command_args, char **envp)
 			&& access(command_args[0], X_OK) == -1)
 		{
 			print_error("pipex: permission denied: ", command_args[0]);
+			free_array(command_args);
 			exit(126);
 		}
 		else
 		{
 			print_error("command not found", command_args[0]);
+			free_array(command_args);
 			exit(127);
 		}
-		free_array(command_args);
 	}
 	return (command_path);
 }
