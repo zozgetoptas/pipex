@@ -12,13 +12,12 @@
 
 #include <stdio.h>
 #include "pipex.h"
-#include <stddef.h>
 #include "libft/libft.h"
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
-
+#include <unistd.h>
 
 static void	execute_command(char *command, char **envp)
 {
@@ -28,30 +27,7 @@ static void	execute_command(char *command, char **envp)
 	command_args = ft_split(command, ' ');
 	if (!command_args)
 		error_exit("pipex: memory allocation failed");
-	if (!command_args[0])
-	{
-		ft_putstr_fd("pipex: empty command\n", 2);
-		free_array(command_args);
-		exit(1);
-	}
-	command_path = find_command_path(command_args[0], envp);
-	if (!command_path)
-	{
-		if (access(command_args[0], F_OK) == 0 && access(command_args[0], X_OK) == -1)
-		{
-			// Dosya var (F_OK), ama çalıştırılabilir değil (X_OK)
-			print_error("pipex: permission denied: ", command_args[0]);
-			free_array(command_args);
-			exit(126);
-		}
-		else
-		{
-			// Komut hiçbir yerde bulunamadı
-			print_error("command not found: ", command_args[0]);
-			free_array(command_args);
-			exit(127);
-		}
-	}
+	command_path = validate_and_get_command_path(command_args, envp);
 	if (execve(command_path, command_args, envp) == -1)
 	{
 		print_error("pipex: execve failed: ", command_args[0]);
@@ -69,7 +45,7 @@ static void	first_child_process(int *pipe_fds, char **argv, char **envp)
 	first_file_fd = open(argv[1], O_RDONLY);
 	if (first_file_fd == -1)
 	{
-		ft_putstr_fd("pipex: ", 2);
+		ft_putstr_fd("-bash: ", 2);
 		perror(argv[1]);
 		close(pipe_fds[1]);
 		exit(1);
@@ -89,25 +65,25 @@ static void	first_child_process(int *pipe_fds, char **argv, char **envp)
 
 static void	second_child_process(int *pipe_fds, char **argv, char **envp)
 {
-	int second_file_fd;
-	
+	int	second_file_fd;
+
 	close(pipe_fds[1]);
 	second_file_fd = open(argv[4], O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (second_file_fd == -1)
 	{
-		ft_putstr_fd("pipex: ", 2);
+		ft_putstr_fd("-bash: ", 2);
 		perror(argv[4]);
 		close(pipe_fds[0]);
 		exit(1);
 	}
-	if (dup2(pipe_fds[0], STDIN_FILENO) == -1)
+	if (dup2(pipe_fds[0], 0) == -1)
 	{
 		close(pipe_fds[0]);
 		close(second_file_fd);
 		error_exit("dup2 pipe read failed");
 	}
 	close(pipe_fds[0]);
-	if (dup2(second_file_fd, STDOUT_FILENO) == -1)
+	if (dup2(second_file_fd, 1) == -1)
 	{
 		close(second_file_fd);
 		error_exit("dup2 outfile failed");
@@ -126,13 +102,11 @@ static void	create_processes(int *pipe_fds, char **argv, char **envp)
 		error_exit("failure creating first child process");
 	if (pid1 == 0)
 		first_child_process(pipe_fds, argv, envp);
-
 	pid2 = fork();
 	if (pid2 == -1)
 		error_exit("failure creating second child process");
 	if (pid2 == 0)
 		second_child_process(pipe_fds, argv, envp);
-
 	close(pipe_fds[0]);
 	close(pipe_fds[1]);
 	waitpid(pid1, NULL, 0);
@@ -153,5 +127,3 @@ int	main(int argc, char **argv, char **envp)
 	create_processes(pipe_fds, argv, envp);
 	return (0);
 }
-
-

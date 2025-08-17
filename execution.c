@@ -15,42 +15,60 @@
 #include <stddef.h>
 #include "libft/libft.h"
 #include <fcntl.h>
+#include "pipex.h"
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
-void cleanup_and_exit(int *pipe_fds, int exit_code)
+char	*validate_and_get_command_path(char **command_args, char **envp)
 {
-    if (pipe_fds)
-    {
-        if (pipe_fds[0] != -1) close(pipe_fds[0]);
-        if (pipe_fds[1] != -1) close(pipe_fds[1]);
-    }
-    exit(exit_code);
-}
-void	error_exit(char *error_message)
-{
-	perror(error_message); // stderr'e yazar (errno'ya gore cikti)
-	exit(1); // programi sonlandirir, kontrolu dogrudan isletim sistemine geri verir
-}
+	char	*command_path;
 
-void	free_array(char **arr)
-{
-	size_t i = 0;
-
-	if (!arr)
-		return ;
-	while (arr[i])
+	if (!command_args[0])
 	{
-		free(arr[i]);
-		i++;
+		ft_putstr_fd("pipex: empty command\n", 2);
+		free_array(command_args);
+		exit(1);
 	}
-	free(arr);
+	command_path = find_command_path(command_args[0], envp);
+	if (!command_path)
+	{
+		if (access(command_args[0], F_OK) == 0
+			&& access(command_args[0], X_OK) == -1)
+		{
+			print_error("pipex: permission denied: ", command_args[0]);
+			exit(126);
+		}
+		else
+		{
+			print_error("command not found", command_args[0]);
+			exit(127);
+		}
+		free_array(command_args);
+	}
+	return (command_path);
+}
+
+char	*find_command_path(char *command, char **envp)
+{
+	char	**directories_to_check;
+	char	*result;
+
+	if (access(command, X_OK) == 0)
+		return (ft_strdup(command));
+	directories_to_check = get_path_directories(envp);
+	if (!directories_to_check)
+		return (NULL);
+	result = search_in_directories(directories_to_check, command);
+	free_array(directories_to_check);
+	return (result);
 }
 
 char	**get_path_directories(char **envp)
 {
-	int i = 0;
+	int	i;
+
+	i = 0;
 	while (envp[i] && ft_strncmp(envp[i], "PATH=", 5))
 		i++;
 	if (!envp[i])
@@ -58,41 +76,26 @@ char	**get_path_directories(char **envp)
 	return (ft_split(envp[i] + 5, ':'));
 }
 
-void	print_error(char *prefix, char *cmd)
+char	*search_in_directories(char **directories, char *command)
 {
-	ft_putstr_fd(prefix, 2);
-	ft_putstr_fd(cmd, 2);
-	ft_putstr_fd("\n", 2);
-}
-
-char	*find_command_path(char *command, char **envp)
-{
-	char	**directories_to_check;
-	char	*full_path;
 	char	*temp_path;
+	char	*full_path;
 	int		i;
 
 	i = 0;
-	if (access(command, X_OK) == 0)
-		return (ft_strdup(command));
-	directories_to_check = get_path_directories(envp);
-	if (!directories_to_check)
-		return (NULL);
-	while (directories_to_check[i])
+	while (directories[i])
 	{
-		temp_path = ft_strjoin(directories_to_check[i], "/");
+		temp_path = ft_strjoin(directories[i], "/");
 		if (!temp_path)
-			return (free_array(directories_to_check), NULL);
+			return (NULL);
 		full_path = ft_strjoin(temp_path, command);
 		free(temp_path);
 		if (!full_path)
-			return (free_array(directories_to_check), NULL);
+			return (NULL);
 		if (access(full_path, X_OK) == 0)
-			return (free_array(directories_to_check), full_path);
+			return (full_path);
 		free(full_path);
 		i++;
 	}
-	return (free_array(directories_to_check), NULL);
+	return (NULL);
 }
-
-
