@@ -10,40 +10,35 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include <stdio.h>
 #include <unistd.h>
-#include <stddef.h>
 #include "libft/libft.h"
 #include <fcntl.h>
 #include "pipex.h"
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <stdlib.h>
 
-char	*validate_and_get_command_path(char **command_args, char **envp)
+char	*validate_and_get_command_path(char **cmd_args, char **envp)
 {
 	char	*command_path;
 
-	if (!command_args[0])
+	if (!cmd_args[0])
 	{
 		ft_putstr_fd("pipex: empty command\n", 2);
-		free_array(command_args);
+		free_array(cmd_args);
 		exit(1);
 	}
-	command_path = find_command_path(command_args[0], envp);
+	command_path = find_command_path(cmd_args[0], envp);
 	if (!command_path)
 	{
-		if (access(command_args[0], F_OK) == 0
-			&& access(command_args[0], X_OK) == -1)
+		if (access(cmd_args[0], F_OK) == 0 && access(cmd_args[0], X_OK) == -1)
 		{
-			print_error("pipex: permission denied: ", command_args[0]);
-			free_array(command_args);
+			print_error("pipex: permission denied: ", cmd_args[0]);
+			free_array(cmd_args);
 			exit(126);
 		}
 		else
 		{
-			print_error("command not found", command_args[0]);
-			free_array(command_args);
+			print_error("command not found", cmd_args[0]);
+			free_array(cmd_args);
 			exit(127);
 		}
 	}

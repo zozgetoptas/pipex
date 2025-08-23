@@ -30,10 +30,9 @@ static void	execute_command(char *command, char **envp)
 	command_path = validate_and_get_command_path(command_args, envp);
 	if (execve(command_path, command_args, envp) == -1)
 	{
-		print_error("pipex: execve failed: ", command_args[0]);
 		free(command_path);
 		free_array(command_args);
-		exit(1);
+		error_exit("pipex: execve failed");
 	}
 }
 
@@ -58,7 +57,10 @@ static void	first_child_process(int *pipe_fds, char **argv, char **envp)
 	}
 	close(first_file_fd);
 	if (dup2(pipe_fds[1], 1) == -1)
+	{
+		close(pipe_fds[1]);
 		error_exit("dup2 pipe write failed");
+	}
 	close(pipe_fds[1]);
 	execute_command(argv[2], envp);
 }
@@ -98,7 +100,6 @@ static int	create_processes(int *pipe_fds, char **argv, char **envp)
 	pid_t	pid2;
 	int		status1;
 	int		status2;
-    int		final_exit_status;
 
 	pid1 = fork();
 	if (pid1 == -1)
@@ -115,10 +116,10 @@ static int	create_processes(int *pipe_fds, char **argv, char **envp)
 	waitpid(pid1, &status1, 0);
 	waitpid(pid2, &status2, 0);
 	if (WIFEXITED(status2))
-        final_exit_status = WEXITSTATUS(status2);
-    else
-        final_exit_status = 1;
-    return (final_exit_status);
+		return (WEXITSTATUS(status2));
+	else if (WIFSIGNALED(status2))
+		return (128 + WTERMSIG(status2));
+	return (1);
 }
 
 int	main(int argc, char **argv, char **envp)
